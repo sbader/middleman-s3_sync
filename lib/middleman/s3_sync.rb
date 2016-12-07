@@ -108,7 +108,7 @@ module Middleman
 
       def paths_to_invalidate
         files_to_invalidate.map do |file|
-          remote_path = "/#{file.partial_s3_resource.key}"
+          remote_path = "/#{file.path}"
           if File.basename(remote_path) == "index.html"
             [File.dirname(remote_path), remote_path]
           else
@@ -119,7 +119,7 @@ module Middleman
 
       def files_to_invalidate
         files_to_update.concat(files_to_create).select do |file|
-          remote_key = file.partial_s3_resource.key
+          remote_key = file.path
           resource_path = file.resource.path
           remote_key == resource_path || remote_key == resource_path.gsub(".html", "/index.html")
         end
