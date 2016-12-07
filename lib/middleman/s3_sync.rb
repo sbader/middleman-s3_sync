@@ -1,5 +1,6 @@
 require 'fog/aws'
 require 'fog/aws/storage'
+require 'fog/aws/storage'
 require 'digest/md5'
 require 'middleman/s3_sync/version'
 require 'middleman/s3_sync/options'
@@ -11,6 +12,7 @@ require 'middleman/redirect'
 require 'parallel'
 require 'ruby-progressbar'
 require 'thread'
+require 'cloudfront-invalidator'
 
 module Middleman
   module S3Sync
@@ -44,6 +46,7 @@ module Middleman
         create_resources
         update_resources
         delete_resources
+        invalidate_cloudfront_paths
       end
 
       def bucket
@@ -92,6 +95,36 @@ module Middleman
         end
       end
 
+      def invalidate_cloudfront_paths
+        return unless s3_sync_options.invalidate_cloudfront && s3_sync_options.cloudfront_distribution_id.present?
+
+        paths = paths_to_invalidate
+
+        if paths.present?
+          response = cdn_connection.post_invalidation(s3_sync_options.cloudfront_distribution_id, paths)
+          say_status "Invalidation In Progress: #{paths.count} #{'paths'.pluralize(paths.count)} - ID: #{response.body["Id"]}"
+        end
+      end
+
+      def paths_to_invalidate
+        files_to_invalidate.map do |file|
+          remote_path = "/#{file.partial_s3_resource.key}"
+          if File.basename(remote_path) == "index.html"
+            [File.dirname(remote_path), remote_path]
+          else
+            [remote_path]
+          end
+        end.flatten
+      end
+
+      def files_to_invalidate
+        files_to_update.concat(files_to_create).select do |file|
+          remote_key = file.partial_s3_resource.key
+          resource_path = file.resource.path
+          remote_key == resource_path || remote_key == resource_path.gsub(".html", "/index.html")
+        end
+      end
+
       def connection
         connection_options = {
           :region => s3_sync_options.region,
@@ -108,6 +141,21 @@ module Middleman
         end
 
         @connection ||= Fog::Storage::AWS.new(connection_options)
+      end
+
+      def cdn_connection
+        connection_options = {}
+
+        if s3_sync_options.aws_access_key_id && s3_sync_options.aws_secret_access_key
+          connection_options.merge!({
+            :aws_access_key_id => s3_sync_options.aws_access_key_id,
+            :aws_secret_access_key => s3_sync_options.aws_secret_access_key
+          })
+        else
+          connection_options.merge!({ :use_iam_profile => true })
+        end
+
+        @cdn_connection ||= Fog::CDN::AWS.new(connection_options)
       end
 
       def remote_resource_for_path(path)

@@ -23,7 +23,9 @@ module Middleman
         :verbose,
         :content_types,
         :index_document,
-        :error_document
+        :error_document,
+        :cloudfront_distribution_id,
+        :invalidate_cloudfront
       ]
       attr_accessor *OPTIONS
 
@@ -82,6 +84,10 @@ module Middleman
 
       def version_bucket
         @version_bucket.nil? ? false : @version_bucket
+      end
+
+      def invalidate_cloudfront
+        @invalidate_cloudfront.nil? ? false : @invalidate_cloudfront
       end
 
     end
