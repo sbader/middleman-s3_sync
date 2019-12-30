@@ -110,7 +110,8 @@ module Middleman
         files_to_invalidate.map do |file|
           remote_path = "/#{file.path}"
           if File.basename(remote_path) == "index.html"
-            [File.dirname(remote_path), remote_path]
+            dirname = File.dirname(remote_path)
+            [dirname, "#{dirname}/", remote_path]
           else
             [remote_path]
           end
